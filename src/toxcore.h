@@ -36,6 +36,7 @@
 #include <QByteArray>
 #include <QString>
 #include <QList>
+#include <QVariant>
 
 class ToxCore : public QObject
 {
@@ -67,7 +68,7 @@ public:
 
     // returns if and how are connected to the DHT
     // this should be avoided in preference to the corresponding signal
-    TOX_CONNECTION getConnectionStatus() const;
+    TOX_CONNECTION getSelfConnectionStatus() const;
 
     // ms before calling iterate()
     uint32_t iterationInterval() const;
@@ -152,12 +153,52 @@ public:
     // should probably use the corresponding signal instead of this
     QVariant friendGetStatus(uint32_t friend_number) const;
 
+    // get friend's connection status (none, tcp, or udp)
+    // use QVariant::toInt and cast to TOX_CONNECTION enum
+    // should probably use the corresponding signal instead of this
+    QVariant friendGetConnectionStatus(uint32_t friend_number) const;
 
+    // get whether or not the friend is typing
+    // should probably use the corresponding signal instead of this
+    bool friendGetTyping(uint32_t friend_number) const;
+
+    // set whether or not we are typing, returns true on success
+    bool selfSetTyping(uint32_t friend_number, bool is_typing);
+
+    // send a message not exceeding TOX_MAX_MESSAGE_LENGTH, of TOX_MESSAGE_TYPE
+    // returns QVariant holding the message id, or null
+    // use QVariant::value<uint32_t>() to get the message id
+    QVariant friendSendMessage(uint32_t friend_number, TOX_MESSAGE_TYPE type, const QString& message);
+
+    // get a cryptographic hash
+    QByteArray hash(const QByteArray& data);
+
+    // send a file control command, returns true on success
+    bool fileSendControl(uint32_t friend_number, uint32_t file_number, TOX_FILE_CONTROL control);
+
+    // send a file seek command, used only for resuming, returns true on success
+    bool fileSendSeek(uint32_t friend_numner, uint32_t file_number, uint64_t position);
+
+    // get the unique and persistent file_id for a transfer
+    QByteArray fileGetFileID(uint32_t friend_number, uint32_t file_number) const;
+
+    // send a file transfer request. Max name length TOX_MAX_FILENAME_LENGTH,
+    // kind TOX_FILE_KIND (or custom extension)
+    // you may optionally set your own file_id (TOX_FILE_ID_LENGTH), which is
+    // unique and persistent and sometimes has meaning regarding conditional
+    // transfers
+    // returns QVariant holding the file number, or null on error
+    // use QVariant::value<uint32_t>() to get the file number
+    QVariant fileSend(uint32_t friend_number, uint32_t kind, const QByteArray& file_id, const QString& filename);
+
+    // sends a chunk of data over a file transfer, to be called in response to
+    // the fileChunkRequested signal. returns true on success
+    bool fileSendChunk(uint32_t friend_number, uint32_t file_number, uint64_t position, const QByteArray& data);
 
 signals:
     // DHT connection status. Read the tox.h documentation on this callback,
     // handle the signal with care.
-    void connectionStatusChanged(TOX_CONNECTION connection_status);
+    void selfConnectionStatusChanged(TOX_CONNECTION connection_status);
 
     // friend's name changed
     void friendNameChanged(uint32_t friend_number, QString name);
@@ -167,6 +208,27 @@ signals:
 
     // friend's status changed
     void friendStatusChanged(uint32_t friend_number, TOX_USER_STATUS status);
+
+    // friend's connection status changed
+    void friendConnectionStatusChanged(uint32_t friend_number, TOX_CONNECTION connection_status);
+
+    // friend's typing status changed
+    void friendTypingChanged(uint32_t friend_number, bool is_typing);
+
+    // friend sent a read receipt
+    void friendReadReceiptReceived(uint32_t friend_number, uint32_t message_id);
+
+    // someone sent a friend request
+    void friendRequestReceived(QByteArray public_key, QString message);
+
+    // friend sent a message
+    void friendMessageReceived(uint32_t friend_number, TOX_MESSAGE_TYPE type, QString message);
+
+    // friend sent a file control
+    void fileControlReceived(uint32_t friend_number, uint32_t file_number, TOX_FILE_CONTROL control);
+
+    // friend requested a file chunk. Note the reversed word order of the name
+    void fileChunkRequested(uint32_t friend_number, uint32_t file_number, uint64_t position, size_t length);
 
 private:
     Tox* tox;

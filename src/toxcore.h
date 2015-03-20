@@ -38,24 +38,29 @@
 #include <QList>
 #include <QVariant>
 
+class ToxOptions
+{
+public:
+    ToxOptions();
+    ~ToxOptions();
+
+    // clears this and sets it to default opts
+    void ToxOptions::optionsDefault();
+
+    bool isNull() const;
+
+private:
+    Tox_Options* tox_options = nullptr;
+};
+
 class ToxCore : public QObject
 {
     Q_OBJECT
 
 public:
-    // Fills the argument with the default options
-    void optionsDefault(struct Tox_Options* options);
-
-    // creates a default options struct; returns nullptr on failure
-    struct Tox_Options* optionsNew();
-
-    // destroys an options struct
-    optionsFree(struct Tox_Options* options);
-
     // the constructor wraps tox_new: data is any save data, null/empty data for new profile
-    ToxCore::ToxCore(const struct Tox_Options* options, const QByteArray& data);
-
-    ToxCore::~ToxCore();
+    ToxCore(const ToxOptions& options, const QByteArray& data);
+    ~ToxCore();
 
     // gets the save data to be written to file
     QByteArray getSaveData() const;
@@ -170,6 +175,9 @@ public:
     // use QVariant::value<uint32_t>() to get the message id
     QVariant friendSendMessage(uint32_t friend_number, TOX_MESSAGE_TYPE type, const QString& message);
 
+
+    /* BEGIN FILE PSEUDO NAMESPACE */
+
     // get a cryptographic hash
     QByteArray hash(const QByteArray& data);
 
@@ -194,6 +202,72 @@ public:
     // sends a chunk of data over a file transfer, to be called in response to
     // the fileChunkRequested signal. returns true on success
     bool fileSendChunk(uint32_t friend_number, uint32_t file_number, uint64_t position, const QByteArray& data);
+
+
+    /* BEGIN GROUP CHAT NAMESPACE */
+    // temporarily for the old groupchat api, some names are inconsistent with the groupThings* namespace
+
+    // create a new groupchat, returns group_number or -1 on failure
+    int addGroupchat();
+
+    // delete a group chat, returns true on success
+    bool delGroupchat(int group_number);
+
+    // get a peer's name
+    QString groupPeerName(int group_number, int peer_number) const;
+
+    // get a peer's Tox ID pubkey
+    QByteArray groupPeerPubkey(int group_number, int peer_number) const;
+
+    // invite a friend to a group, returns true on success
+    bool inviteFriend(int32_t friend_number, int group_number);
+
+    // join a group you've been invited to, returns group_number or -1 on failure
+    int joinGroupchat(int32_t friend_number, const QByteArray& data);
+
+    // send a message to a group, returns success
+    bool groupMessageSend(int group_number, const QString& message);
+
+    // send an action to a group, returns success
+    bool groupActionSend(int group_number, const QString& action);
+
+    // set a group's title, returns success
+    bool groupSetTitle(int group_number, const QString& title);
+
+    // get a group's title
+    QString groupGetTitle(int group_number); // const
+
+    // check if the peernumber is ours
+    bool groupPeernumberIsOurs(int group_number, int peer_number) const;
+
+    // get the number of peers, returns -1 on failure
+    int groupNumberPeers(int group_number) const;
+
+    // get a list of peers in a chat
+    QStringList groupGetNames(int group_number) const;
+
+    // there are two functions in the old group chat api that I'm
+    // omitting because I don't foresee any use for them in qTox
+
+    // get if av enabled groupchat (TOX_GROUPCHAT_TYPE), returns -1 on failure
+    int groupGetType(int group_number) const;
+
+
+    /* BEGIN EXTRA FUNCTIONS */
+
+    // send a custom packet, returns true on success
+    bool friendSendLossyPacket(uint32_t friend_number, const QByteArray& data);
+
+    bool friendSendLosslessPacket(uint32_t friend_number, const QByteArray& data);
+
+    // get your DHT pk (different from Tox ID pk)
+    QByteArray getSelfDhtID() const;
+
+    // get the port we're bound to, 0 on error
+    uint16_t getSelfUdpPort() const;
+
+    // get the TCP port we're bound to, if acting as a TCP relay. 0 on error
+    uint16_t getSelfTcpPort() const;
 
 signals:
     // DHT connection status. Read the tox.h documentation on this callback,
@@ -229,6 +303,33 @@ signals:
 
     // friend requested a file chunk. Note the reversed word order of the name
     void fileChunkRequested(uint32_t friend_number, uint32_t file_number, uint64_t position, size_t length);
+
+    // friend wants to send us a file
+    void fileReceiveRequested(uint32_t friend_number, uint32_t file_number, uint32_t kind, uint64_t file_size, QString filename);
+
+    // friend has sent a chunk
+    void fileChunkReceived(uint32_t friend_number, uint32_t file_number, uint64_t position, QByteArray data);
+
+    // a friend sent us a group invite of TOX_GROUPCHAT_TYPE_{TEXT,AV}
+    void groupInviteReceived(int32_t friend_number, uint8_t type, QByteArray data);
+
+    // group sent a message
+    void groupMessageReceived(int group_number, int peer_number, QString message);
+
+    // group sent an action
+    void groupActionReceived(int group_number, int peer_number, QString action);
+
+    // group title has changed
+    void groupTitleChanged(int group_number, int peer_number, QString title);
+
+    // group peers have changed
+    void groupNamelistChanged(int group_number, int peer_number, TOX_CHAT_CHANGE change);
+
+    // friend sent a custom packet
+    void friendLossyPacketReceived(uint32_t friend_number, QByteArray data);
+
+    // friend sent a custom packet
+    void friendLosslessPacketReceived(uint32_t friend_number, QByteArray data);
 
 private:
     Tox* tox;

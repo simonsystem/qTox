@@ -77,31 +77,55 @@ bool ToxOptions::isNull() const
     err_t error;                                                       \
     retvar = func(__VA_ARGS__, &error);                                \
     if (error != err_t##_OK)                                           \
-        qError() << "Error:" << func << "failed with code" << error;   \
+        qError() << "Error:" << #func << "failed with code" << error;  \
     } while(0)                                                         \
 
 #define QTOX_CORE_CALL_VOID_VOID(func, err_t) do {                     \
     err_t error;                                                       \
     func(&error);                                                      \
     if (error != err_t##_OK)                                           \
-        qError() << "Error:" << func << "failed with code" << error;   \
+        qError() << "Error:" << #func << "failed with code" << error;  \
     } while (0)                                                        \
 
 #define QTOX_CORE_CALL_VOID_ARGS(func, err_t, ...) do {                \
     err_t error;                                                       \
     func(__VA_ARGS__, &error);                                         \
     if (error != err_t##_OK)                                           \
-        qError() << "Error:" << func << "failed with code" << error;   \
+        qError() << "Error:" << #func << "failed with code" << error;  \
     } while (0)                                                        \
 
 #define QTOX_CORE_CALL_RETV_VOID(func, err_t, retvar) do {             \
     err_t error;                                                       \
     retvar = func(&error);                                             \
     if (error != err_t##_OK)                                           \
-        qError() << "Error:" << func << "failed with code" << error;   \
+        qError() << "Error:" << #func << "failed with code" << error;  \
     } while(0)                                                         \
 
 ToxCore::ToxCore(const ToxOptions& options, const QByteArray& data)
 {
-    
+    //TODO
+}
+
+QByteArray ToxCore::getSaveData() const
+{
+    size_t size = tox_get_savedata_size(tox);
+    uint8_t* array = new uint8_t[size];
+    //TODO
+}
+
+bool ToxCore::bootstrap(const QString& host, uint16_t port, const QByteArray& publicKey)
+{
+    CString s(host);
+    CString b(publicKey);
+    bool ret;
+    QTOX_CORE_CALL_RETV_ARGS(tox_bootstrap, TOX_ERR_BOOTSTRAP, ret, tox, s.data(), port, b.data());
+#if 0 This should evaluate to:
+do {
+    TOX_ERR_BOOTSTRAP error;
+    ret = tox_bootstrap(tox, s.data(), port, b.data(), &error);
+    if (error != TOX_ERR_BOOSTRAP_OK)
+        qError() << "Error:" << "tox_bootstrap" << "failed with code" << error;
+while(0)
+#endif
+    return ret;
 }

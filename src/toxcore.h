@@ -85,7 +85,7 @@ public:
     /* BEGIN SELF PSEUDO NAMESPACE */
 
     // get your own Tox friend address
-    QByteArray selfGetAddress() const;
+    QByteArray getSelfAddress() const;
 
     // get your own nospam
     uint32_t getSelfNoSpam() const;

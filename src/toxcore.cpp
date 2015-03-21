@@ -59,47 +59,25 @@ bool ToxOptions::isNull() const
     return tox_options == nullptr;
 }
 
-/* I would like to investigate the possibility of using a macro
-   to call functions with the error param, and ignore-other-than-to-log
-   the error if any. Such a macro would take (at least) as arguments:
-     - function name
-     - error enum name (since they all use the _OK suffix for success)
-     - optional variable to store the ret value in
-     - the args
+/* Use a nifty template to heavily reduce code duplication.
+   It wraps any core function with an error checker/logger
+   (itself wrapped in a macro to get the function name for the error log).
+   Sadly it can't be used for functions with undefined retval on error, since the
+   caller doesn't see any errors.
+   Many thanks to nurupo and iphy for much help with the templating
 */
 
-/* The following is what I have so far. variadic args alone can be zero
-   or more, but having other args besides the variadic means that the
-   variadic args must be *one* or more... so a total of four macros for
-   two different options. */
+template <typename R, typename E, typename... ARGS>
+R qtox_call_core(const char* name, R (*func)(ARGS..., E*), E ok_val, ARGS... args)
+{
+    E error;
+    R ret = func(args, &error);
+    if (error != ok_val)
+        qError() << "Error:" << name << "failed with code" << error;
+    return ret;
+}
 
-#define QTOX_CORE_CALL_RETV_ARGS(func, err_t, retvar, ...) do {        \
-    err_t error;                                                       \
-    retvar = func(__VA_ARGS__, &error);                                \
-    if (error != err_t##_OK)                                           \
-        qError() << "Error:" << #func << "failed with code" << error;  \
-    } while(0)                                                         \
-
-#define QTOX_CORE_CALL_VOID_VOID(func, err_t) do {                     \
-    err_t error;                                                       \
-    func(&error);                                                      \
-    if (error != err_t##_OK)                                           \
-        qError() << "Error:" << #func << "failed with code" << error;  \
-    } while (0)                                                        \
-
-#define QTOX_CORE_CALL_VOID_ARGS(func, err_t, ...) do {                \
-    err_t error;                                                       \
-    func(__VA_ARGS__, &error);                                         \
-    if (error != err_t##_OK)                                           \
-        qError() << "Error:" << #func << "failed with code" << error;  \
-    } while (0)                                                        \
-
-#define QTOX_CORE_CALL_RETV_VOID(func, err_t, retvar) do {             \
-    err_t error;                                                       \
-    retvar = func(&error);                                             \
-    if (error != err_t##_OK)                                           \
-        qError() << "Error:" << #func << "failed with code" << error;  \
-    } while(0)                                                         \
+#define QTOX_CALL_CORE(FUNC, OK, ...) qtox_call_core(#FUNC, FUNC, OK, __VA_ARGS__)
 
 ToxCore::ToxCore(const ToxOptions& options, const QByteArray& data)
 {
@@ -117,15 +95,5 @@ bool ToxCore::bootstrap(const QString& host, uint16_t port, const QByteArray& pu
 {
     CString s(host);
     CString b(publicKey);
-    bool ret;
-    QTOX_CORE_CALL_RETV_ARGS(tox_bootstrap, TOX_ERR_BOOTSTRAP, ret, tox, s.data(), port, b.data());
-#if 0 This should evaluate to:
-do {
-    TOX_ERR_BOOTSTRAP error;
-    ret = tox_bootstrap(tox, s.data(), port, b.data(), &error);
-    if (error != TOX_ERR_BOOSTRAP_OK)
-        qError() << "Error:" << "tox_bootstrap" << "failed with code" << error;
-while(0)
-#endif
-    return ret;
+    return QTOX_CALL_CORE(tox_bootstrap, TOX_ERR_BOOTSTRAP_OK, tox, s.data(), port, b.data());
 }

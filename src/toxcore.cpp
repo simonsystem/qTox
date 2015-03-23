@@ -30,6 +30,7 @@
  * https://github.com/irungentoo/toxcore/blob/master/toxcore/tox.h */
 
 #include "toxcore.h"
+#include "misc/cstring.h"
 #include <new>
 #include <QDebug>
 
@@ -49,9 +50,9 @@ template <typename R, typename E, typename... ARGS>
 static R qtox_call_core(const char* name, R (*func)(ARGS..., E*), E ok_val, ARGS... args)
 {
     E error;
-    R ret = func(args, &error);
+    R ret = func(args..., &error);
     if (error != ok_val)
-        qError() << "Error:" << name << "failed with code" << error;
+        qWarning() << "Error:" << name << "failed with code" << error;
     return ret;
 }
 #define QTOX_CALL_CORE(FUNC, OK, ...) qtox_call_core(#FUNC, FUNC, OK, __VA_ARGS__)
@@ -60,10 +61,10 @@ template <typename R, typename E, typename... ARGS>
 static QVariant qtox_call_core_variant(const char* name, R (*func)(ARGS..., E*), E ok_val, ARGS... args)
 {
     E error;
-    R ret = func(args, &error);
+    R ret = func(args..., &error);
     if (error != ok_val)
     {
-        qError() << "Error:" << name << "failed with code" << error;
+        qWarning() << "Error:" << name << "failed with code" << error;
         return QVariant();
     }
     else
@@ -73,7 +74,7 @@ static QVariant qtox_call_core_variant(const char* name, R (*func)(ARGS..., E*),
 }
 #define QTOX_CALL_CORE_VARIANT(FUNC, OK, ...) qtox_call_core_variant(#FUNC, FUNC, OK, __VA_ARGS__)
 
-static typedef enum {CLAMP_LTE, CLAMP_EQ, CLAMP_GTE} CLAMP_TYPE;
+typedef enum {CLAMP_LTE, CLAMP_EQ, CLAMP_GTE} CLAMP_TYPE;
 static bool clamp(size_t sz, size_t req, CLAMP_TYPE type, const char* func, int line)
 {
     if      (type == CLAMP_LTE && sz <= req)
@@ -83,9 +84,9 @@ static bool clamp(size_t sz, size_t req, CLAMP_TYPE type, const char* func, int 
     else if (type == CLAMP_GTE && sz >= req)
             return true;
     else
-        qError() << "Error: unknown clamp type";
+        qWarning() << "Error: unknown clamp type";
 
-    qError() << "Error:" << func << "failed a clamp at line" << line << "sizes:" << sz << req;
+    qWarning() << "Error:" << func << "failed a clamp at line" << line << "sizes:" << sz << req;
     return false;
 }
 #define CLAMP(sz, req, type) clamp(sz, req, type, __func__, __LINE__)
@@ -95,20 +96,22 @@ static bool clamp(size_t sz, size_t req, CLAMP_TYPE type, const char* func, int 
 // I'm not copying and pasting this, much less typing it each time
 #define QBA_CAST(data) (reinterpret_cast<const char*>((data)))
 #define UI8_CAST(data) (reinterpret_cast<uint8_t*>   ((data)))
+#define CUI8_CAST(data) (reinterpret_cast<const uint8_t*>   ((data)))
 
 // ditto
-#define CORE_CAST(ptr) (static_cast<ToxCore*>((data)))
+#define CORE_CAST(ptr) (static_cast<ToxCore*>((ptr)))
 
 ////////////////////////////////////////////////////////////////////////////////
 // Now the implementation
 
 ToxOptions::ToxOptions()
 {
-    tox_options = tox_options_new(); // nullptr on malloc failure
+    tox_options = tox_options_new(nullptr); // nullptr on malloc failure
     if (!tox_options) // emulate new operator
     {
-        qError() << "Amazing. You actually broke malloc.";
-        throw std::bad_alloc;
+        qWarning() << "Amazing. You actually broke malloc.";
+        std::bad_alloc exception;
+        throw exception;
     }
 }
 
@@ -137,7 +140,8 @@ bool ToxCore::bootstrap(const QString& host, uint16_t port, const QByteArray& pu
         || !CLAMP(publicKey.size(), TOX_PUBLIC_KEY_SIZE, CLAMP_EQ))
             return false;
     CString hst(host);
-    return QTOX_CALL_CORE(tox_bootstrap, TOX_ERR_BOOTSTRAP_OK, tox, hst.data(), port, UI8_CAST(publicKey.data()));
+    return qtox_call_core<bool, TOX_ERR_BOOTSTRAP, Tox*, const char*, uint16_t, const uint8_t*>
+            ("tox_bootstrap", tox_bootstrap, TOX_ERR_BOOTSTRAP_OK, tox, reinterpret_cast<const char*>(hst.data()), port, CUI8_CAST(publicKey.data()));
 }
 
 bool ToxCore::addTcpRelay(const QString& host, uint16_t port, const QByteArray& publicKey)
@@ -146,7 +150,7 @@ bool ToxCore::addTcpRelay(const QString& host, uint16_t port, const QByteArray& 
         || !CLAMP(publicKey.size(), TOX_PUBLIC_KEY_SIZE, CLAMP_EQ))
             return false;
     CString hst(host);
-    return QTOX_CALL_CORE(tox_add_tcp_relay, TOX_ERR_BOOTSTRAP_OK, tox, hst.data(), port, UI8_CAST(publicKey.data()));
+    return QTOX_CALL_CORE(tox_add_tcp_relay, TOX_ERR_BOOTSTRAP_OK, tox, hst.data(), port, CUI8_CAST(publicKey.data()));
 }
 
 TOX_CONNECTION ToxCore::getSelfConnectionStatus() const
@@ -159,7 +163,7 @@ static void _selfConnectionStatusChanged(Tox*, TOX_CONNECTION status, void* data
     emit CORE_CAST(data)->selfConnectionStatusChanged(status);
 }
 
-uint32_t ToxCore::iterationInterval() const;
+uint32_t ToxCore::iterationInterval() const
 {
     return tox_iteration_interval(tox);
 }
@@ -182,7 +186,7 @@ uint32_t ToxCore::getSelfNoSpam() const
     return tox_self_get_nospam(tox);
 }
 
-void ToxCore::setSelfNoSpam(uint32_t nospam) const
+void ToxCore::setSelfNoSpam(uint32_t nospam)
 {
     tox_self_set_nospam(tox, nospam);
 }
@@ -198,7 +202,7 @@ QByteArray ToxCore::getSelfPublicKey() const
 QByteArray ToxCore::getSelfSecretKey() const
 {
     QByteArray ret;
-    ret.resize(TOX_SECRET_KEY_SIZE];
+    ret.resize(TOX_SECRET_KEY_SIZE);
     tox_self_get_secret_key(tox, UI8_CAST(ret.data()));
     return ret;
 }
@@ -267,14 +271,14 @@ uint32_t ToxCore::friendAdd(const QByteArray& address, const QString& message)
     if (   !CLAMP(msg.size(), TOX_MAX_FRIEND_REQUEST_LENGTH, CLAMP_LTE)
         || !CLAMP(address.size(), TOX_ADDRESS_SIZE, CLAMP_EQ))
             return UINT32_MAX;
-    return QTOX_CALL_CORE(tox_friend_add, TOX_ERR_FRIEND_ADD_OK, tox, UI8_CAST(address.data()), msg.data(), msg.size());
+    return QTOX_CALL_CORE(tox_friend_add, TOX_ERR_FRIEND_ADD_OK, tox, CUI8_CAST(address.data()), msg.data(), msg.size());
 }
 
 uint32_t ToxCore::friendAddNoRequest(const QByteArray& publicKey)
 {
     if (!CLAMP(publicKey.size(), TOX_PUBLIC_KEY_SIZE, CLAMP_EQ))
         return UINT32_MAX;
-    return QTOX_CALL_CORE(tox_friend_add_norequest, TOX_ERR_FRIEND_ADD_OK, tox, UI8_CAST(publicKey.data()));
+    return QTOX_CALL_CORE(tox_friend_add_norequest, TOX_ERR_FRIEND_ADD_OK, tox, CUI8_CAST(publicKey.data()));
 }
 
 bool ToxCore::friendDelete(uint32_t friend_number)
@@ -286,7 +290,7 @@ uint32_t ToxCore::friendByPublicKey(const QByteArray& public_key) const
 {
     if (!CLAMP(public_key.size(), TOX_PUBLIC_KEY_SIZE, CLAMP_EQ))
         return UINT32_MAX;
-    return QTOX_CALL_CORE(tox_friend_by_public_key, TOX_ERR_FRIEND_BY_PUBLIC_KEY_OK, tox, UI8_CAST(public_key.data()));
+    return QTOX_CALL_CORE(tox_friend_by_public_key, TOX_ERR_FRIEND_BY_PUBLIC_KEY_OK, tox, CUI8_CAST(public_key.data()));
 }
 
 QByteArray ToxCore::friendGetPublicKey(uint32_t friend_number) const
@@ -307,7 +311,7 @@ bool ToxCore::friendExists(uint32_t friend_number) const
 QList<uint32_t> ToxCore::getSelfFriendList() const
 {
     size_t size = tox_self_get_friend_list_size(tox);
-    uint32_t[] array = new uint32_t[size];
+    uint32_t* array = new uint32_t[size];
     tox_self_get_friend_list(tox, array);
     QList<uint32_t> ret;
     ret.reserve(size);
@@ -421,7 +425,7 @@ QByteArray ToxCore::hash(const QByteArray& data)
 {
     QByteArray ret;
     ret.resize(TOX_HASH_LENGTH);
-    if (tox_hash(UI8_CAST(ret.data()), UI8_CAST(data.data()), data.size()))
+    if (tox_hash(UI8_CAST(ret.data()), CUI8_CAST(data.data()), data.size()))
         return ret;
     else
         return QByteArray();
@@ -454,25 +458,25 @@ QByteArray ToxCore::fileGetFileID(uint32_t friend_number, uint32_t file_number) 
 
 uint32_t ToxCore::fileSend(uint32_t friend_number, uint32_t kind, uint64_t file_size, const QByteArray& file_id, const QString& filename)
 {
-    uint8_t* id;
+    const uint8_t* id;
     if (file_id.isEmpty())
         id = nullptr;
     else if (!CLAMP(file_id.size(), TOX_FILE_ID_LENGTH, CLAMP_EQ))
         return UINT32_MAX;
     else
-        id = UI8_CAST(file_id.data());
+        id = CUI8_CAST(file_id.data());
     CString name(filename);
     return QTOX_CALL_CORE(tox_file_send, TOX_ERR_FILE_SEND_OK, tox, friend_number, kind, file_size, id, name.data(), name.size());
 }
 
 bool ToxCore::fileSendChunk(uint32_t friend_number, uint32_t file_number, uint64_t position, const QByteArray& data)
 {
-    return QTOX_CALL_CORE(tox_file_send_chunk, TOX_ERR_FILE_SEND_CHUNK_OK, tox, friend_number, file_number, position, UI8_CAST(data.data()), data.size());
+    return QTOX_CALL_CORE(tox_file_send_chunk, TOX_ERR_FILE_SEND_CHUNK_OK, tox, friend_number, file_number, position, CUI8_CAST(data.data()), data.size());
 }
 
 static void _fileChunkRequested(Tox*, uint32_t friend_number, uint32_t file_number, uint64_t position, size_t length, void* core)
 {
-    emit CORE_CAST(core)->(friend_number, file_number, position, length);
+    emit CORE_CAST(core)->fileChunkRequested(friend_number, file_number, position, length);
 }
 
 static void _fileReceiveRequested(Tox*, uint32_t friend_number, uint32_t file_number, uint32_t kind, uint64_t file_size, const uint8_t* filename, size_t filename_length, void* core)
@@ -511,9 +515,9 @@ static void _groupTitleChanged(Tox*, int group_number, int peer_number, const ui
     emit CORE_CAST(core)->groupTitleChanged(group_number, peer_number, ttl);
 }
 
-static void _groupNamelistChanged(Tox*, int group_number, int peer_number, TOX_CHAT_CHANGE change, void* core)
+static void _groupNamelistChanged(Tox*, int group_number, int peer_number, uint8_t change, void* core)
 {
-    emit CORE_CAST(core)->groupNamelistChanged(group_number, peer_number, change);
+    emit CORE_CAST(core)->groupNamelistChanged(group_number, peer_number, (TOX_CHAT_CHANGE)change);
 }
 
 int ToxCore::addGroupchat()
@@ -554,19 +558,19 @@ bool ToxCore::inviteFriend(int32_t friend_number, int group_number)
 
 int ToxCore::joinGroupchat(int32_t friend_number, const QByteArray& data)
 {
-    return tox_join_groupchat(tox, friend_number, UI8_CAST(data.data()), data.size());
+    return tox_join_groupchat(tox, friend_number, CUI8_CAST(data.data()), data.size());
 }
 
 bool ToxCore::groupMessageSend(int group_number, const QString& message)
 {
     CString msg(message);
-    return 0 == tox_group_message_send(group_number, msg.data(), msg.size());
+    return 0 == tox_group_message_send(tox, group_number, msg.data(), msg.size());
 }
 
 bool ToxCore::groupActionSend(int group_number, const QString& action)
 {
     CString act(action);
-    return 0 == tox_group_action_send(group_number, act.data(), act.size());
+    return 0 == tox_group_action_send(tox, group_number, act.data(), act.size());
 }
 
 bool ToxCore::groupSetTitle(int group_number, const QString& title)
@@ -586,7 +590,7 @@ QString ToxCore::groupGetTitle(int group_number) // const
         return QString(ret);
 }
 
-bool ToxCore::groupPeernumerIsOurs(int group_number, int peer_number) const
+bool ToxCore::groupPeernumberIsOurs(int group_number, int peer_number) const
 {
     return 1 == tox_group_peernumber_is_ours(tox, group_number, peer_number);
 }
@@ -599,19 +603,15 @@ int ToxCore::groupNumberPeers(int group_number) const
 QStringList ToxCore::groupGetNames(int group_number) const
 {
     int num = tox_group_number_peers(tox, group_number);
-    uint8_t** names = new uint8_t*[num];
-    for (int i = 0; i < num; i++)
-        names[i] = new uint8_t[TOX_MAX_NAME_LENGTH];
-    uint16_t lengths = new uint16_t[num];
+    uint8_t (*names)[TOX_MAX_NAME_LENGTH] = new uint8_t[num][TOX_MAX_NAME_LENGTH];
+    // declare names as pointer to array 128 of char (http://cdecl.org)
+    uint16_t* lengths = new uint16_t[num];
     if (num != tox_group_get_names(tox, group_number, names, lengths, num))
         return QStringList();
     QStringList ret;
     ret.reserve(num);
     for (int i = 0; i < num; i++)
-    {
         ret.append(CString::toString(names[i], lengths[i]));
-        delete[] names[i];
-    }
     delete[] names;
     delete[] lengths;
     return ret;    
@@ -626,7 +626,7 @@ bool ToxCore::friendSendLossyPacket(uint32_t friend_number, const QByteArray& da
 {
     if (!CLAMP(data.size(), TOX_MAX_CUSTOM_PACKET_SIZE, CLAMP_LTE))
         return false;
-    return QTOX_CALL_CORE(tox_friend_send_lossy_packet, TOX_ERR_FRIEND_CUSTOM_PACKET_OK, tox, friend_number, UI8_CAST(data.data()), data.size());
+    return QTOX_CALL_CORE(tox_friend_send_lossy_packet, TOX_ERR_FRIEND_CUSTOM_PACKET_OK, tox, friend_number, CUI8_CAST(data.data()), data.size());
 }
 
 static void _friendLossyPacketReceived(Tox*, uint32_t friend_number, const uint8_t* data, size_t length, void* core)
@@ -639,7 +639,7 @@ bool ToxCore::friendSendLosslessPacket(uint32_t friend_number, const QByteArray&
 {
     if (!CLAMP(data.size(), TOX_MAX_CUSTOM_PACKET_SIZE, CLAMP_LTE))
         return false;
-    return QTOX_CALL_CORE(tox_friend_send_lossless_packet, TOX_ERR_FRIEND_CUSTOM_PACKET_OK, tox, friend_number, UI8_CAST(data.data()), data.size());
+    return QTOX_CALL_CORE(tox_friend_send_lossless_packet, TOX_ERR_FRIEND_CUSTOM_PACKET_OK, tox, friend_number, CUI8_CAST(data.data()), data.size());
 }
 
 static void _friendLosslessPacketReceived(Tox*, uint32_t friend_number, const uint8_t* data, size_t length, void* core)
@@ -663,7 +663,7 @@ uint16_t ToxCore::getSelfUdpPort() const
     uint16_t ret = tox_self_get_udp_port(tox, &error);
     if (error != TOX_ERR_GET_PORT_OK)
     {
-        qError() << "Error:" << "tox_self_get_udp_port" << "failed with code" << error;
+        qWarning() << "Error:" << "tox_self_get_udp_port" << "failed with code" << error;
         return 0;
     }
     return ret;
@@ -676,7 +676,7 @@ uint16_t ToxCore::getSelfTcpPort() const
     uint16_t ret = tox_self_get_tcp_port(tox, &error);
     if (error != TOX_ERR_GET_PORT_OK)
     {
-        qError() << "Error:" << "tox_self_get_tcp_port" << "failed with code" << error;
+        qWarning() << "Error:" << "tox_self_get_tcp_port" << "failed with code" << error;
         return 0;
     }
     return ret;
@@ -684,7 +684,7 @@ uint16_t ToxCore::getSelfTcpPort() const
 
 ToxCore::ToxCore(const ToxOptions& options, const QByteArray& data)
 {
-    uint8_t* dat;
+    const uint8_t* dat;
     size_t size;
     if (data.isEmpty())
     {
@@ -693,10 +693,10 @@ ToxCore::ToxCore(const ToxOptions& options, const QByteArray& data)
     }
     else
     {
-        dat = UI8_CAST(data.data());
+        dat = CUI8_CAST(data.data());
         size = data.size();
     }
-    tox = tox_new(options->tox_options, dat, size, &error);
+    tox = tox_new(options.tox_options, dat, size, &error);
     if (error == TOX_ERR_NEW_LOAD_BAD_FORMAT) // some data may have loaded
     {
         qWarning() << "Warning: tox_new failed with bad load format, but some data may still be loaded";
@@ -704,7 +704,7 @@ ToxCore::ToxCore(const ToxOptions& options, const QByteArray& data)
     else if (error != TOX_ERR_NEW_OK)
     {
         tox = nullptr;
-        qError() << "Error:" << "tox_new" << "failed with code" << error;
+        qWarning() << "Error:" << "tox_new" << "failed with code" << error;
         return;
     }
 

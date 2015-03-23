@@ -46,17 +46,17 @@ uint8_t* CString::data()
     return cString;
 }
 
-uint16_t CString::size() const
+size_t CString::size() const
 {
     return cStringSize;
 }
 
-QString CString::toString(const uint8_t* cString, uint16_t cStringSize)
+QString CString::toString(const uint8_t* cString, size_t cStringSize)
 {
     return QString::fromUtf8(reinterpret_cast<const char*>(cString), cStringSize);
 }
 
-uint16_t CString::fromString(const QString& string, uint8_t* cString)
+size_t CString::fromString(const QString& string, uint8_t* cString)
 {
     QByteArray byteArray = QByteArray(string.toUtf8());
     memcpy(cString, reinterpret_cast<uint8_t*>(byteArray.data()), byteArray.size());

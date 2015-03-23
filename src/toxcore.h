@@ -41,15 +41,12 @@
 class ToxOptions
 {
 public:
-    ToxOptions();
+    ToxOptions(); // gives default options
     ~ToxOptions();
 
     // clears this and sets it to default opts
-    void ToxOptions::optionsDefault();
+    void optionsDefault();
 
-    bool isNull() const;
-
-private:
     Tox_Options* tox_options = nullptr;
 };
 
@@ -59,7 +56,9 @@ class ToxCore : public QObject
 
 public:
     // the constructor wraps tox_new: data is any save data, null/empty data for new profile
-    ToxCore(const ToxOptions& options, const QByteArray& data);
+    ToxCore(const ToxOptions& options = ToxOptions(), const QByteArray& data = QByteArray());
+    // check any errors from the constructor, such as bad proxy
+    TOX_ERR_NEW constructorError() const;
     ~ToxCore();
 
     // gets the save data to be written to file
@@ -196,9 +195,8 @@ public:
     // you may optionally set your own file_id (TOX_FILE_ID_LENGTH), which is
     // unique and persistent and sometimes has meaning regarding conditional
     // transfers
-    // returns QVariant holding the file number, or null on error
-    // use QVariant::value<uint32_t>() to get the file number
-    QVariant fileSend(uint32_t friend_number, uint32_t kind, const QByteArray& file_id, const QString& filename);
+    // returns UINT32_MAX on any error
+    uint32_t fileSend(uint32_t friend_number, uint32_t kind, uint64_t file_size, const QByteArray& file_id, const QString& filename);
 
     // sends a chunk of data over a file transfer, to be called in response to
     // the fileChunkRequested signal. returns true on success
@@ -334,7 +332,7 @@ signals:
 
 private:
     Tox* tox;
-
+    TOX_ERR_NEW error;
 };
 
 #endif // QTOXCORE_H

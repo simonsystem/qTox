@@ -123,11 +123,6 @@ void ToxOptions::optionsDefault()
     tox_options_default(tox_options);
 }
 
-bool ToxOptions::isNull() const
-{
-    return tox_options == nullptr;
-}
-
 QByteArray ToxCore::getSaveData() const
 {
     QByteArray ret;
@@ -142,8 +137,7 @@ bool ToxCore::bootstrap(const QString& host, uint16_t port, const QByteArray& pu
         || !CLAMP(publicKey.size(), TOX_PUBLIC_KEY_SIZE, CLAMP_EQ))
             return false;
     CString hst(host);
-    CString pk(publicKey);
-    return QTOX_CALL_CORE(tox_bootstrap, TOX_ERR_BOOTSTRAP_OK, tox, UI8_CAST(hst.data()), port, UI8_CAST(pk.data()));
+    return QTOX_CALL_CORE(tox_bootstrap, TOX_ERR_BOOTSTRAP_OK, tox, hst.data(), port, UI8_CAST(publicKey.data()));
 }
 
 bool ToxCore::addTcpRelay(const QString& host, uint16_t port, const QByteArray& publicKey)
@@ -152,8 +146,7 @@ bool ToxCore::addTcpRelay(const QString& host, uint16_t port, const QByteArray& 
         || !CLAMP(publicKey.size(), TOX_PUBLIC_KEY_SIZE, CLAMP_EQ))
             return false;
     CString hst(host);
-    CString pk(publicKey);
-    return QTOX_CALL_CORE(tox_add_tcp_relay, TOX_ERR_BOOTSTRAP_OK, tox, UI8_CAST(hst.data()), port, UI8_CAST(pk.data()));
+    return QTOX_CALL_CORE(tox_add_tcp_relay, TOX_ERR_BOOTSTRAP_OK, tox, hst.data(), port, UI8_CAST(publicKey.data()));
 }
 
 TOX_CONNECTION ToxCore::getSelfConnectionStatus() const
@@ -229,7 +222,7 @@ bool ToxCore::setSelfName(const QString& name)
         CString str(name);
         if (!CLAMP(str.size(), TOX_MAX_NAME_LENGTH, CLAMP_LTE))
             return false;
-        return QTOX_CALL_CORE(tox_self_set_name, TOX_ERR_SET_INFO_OK, tox, UI8_CAST(str.data()), str.size());
+        return QTOX_CALL_CORE(tox_self_set_name, TOX_ERR_SET_INFO_OK, tox, str.data(), str.size());
     }
 }
 
@@ -252,7 +245,7 @@ bool ToxCore::setSelfStatusMessage(const QString& status)
         CString str(status);
         if (!CLAMP(str.size(), TOX_MAX_STATUS_MESSAGE_LENGTH, CLAMP_LTE))
             return false;
-        return QTOX_CALL_CORE(tox_self_set_status_message, TOX_ERR_SET_INFO_OK, tox, UI8_CAST(str.data()), str.size());
+        return QTOX_CALL_CORE(tox_self_set_status_message, TOX_ERR_SET_INFO_OK, tox, str.data(), str.size());
     }
 }
 
@@ -270,20 +263,18 @@ uint32_t ToxCore::friendAdd(const QByteArray& address, const QString& message)
 {
     if (!CLAMP(message.size(), 1, CLAMP_GTE))
         return UINT32_MAX;
-    CString addr(address);
     CString msg(message);
     if (   !CLAMP(msg.size(), TOX_MAX_FRIEND_REQUEST_LENGTH, CLAMP_LTE)
-        || !CLAMP(addr.size(), TOX_ADDRESS_SIZE, CLAMP_EQ))
+        || !CLAMP(address.size(), TOX_ADDRESS_SIZE, CLAMP_EQ))
             return UINT32_MAX;
-    return QTOX_CALL_CORE(tox_friend_add, TOX_ERR_FRIEND_ADD_OK, tox, UI8_CAST(addr.data()), UI8_CAST(msg.data()), msg.size());
+    return QTOX_CALL_CORE(tox_friend_add, TOX_ERR_FRIEND_ADD_OK, tox, UI8_CAST(address.data()), msg.data(), msg.size());
 }
 
 uint32_t ToxCore::friendAddNoRequest(const QByteArray& publicKey)
 {
     if (!CLAMP(publicKey.size(), TOX_PUBLIC_KEY_SIZE, CLAMP_EQ))
         return UINT32_MAX;
-    CString pk(publicKey);
-    return QTOX_CALL_CORE(tox_friend_add_norequest, TOX_ERR_FRIEND_ADD_OK, tox, UI8_CAST(pk.data()));
+    return QTOX_CALL_CORE(tox_friend_add_norequest, TOX_ERR_FRIEND_ADD_OK, tox, UI8_CAST(publicKey.data()));
 }
 
 bool ToxCore::friendDelete(uint32_t friend_number)
@@ -295,8 +286,7 @@ uint32_t ToxCore::friendByPublicKey(const QByteArray& public_key) const
 {
     if (!CLAMP(public_key.size(), TOX_PUBLIC_KEY_SIZE, CLAMP_EQ))
         return UINT32_MAX;
-    CString pk(public_key);
-    return QTOX_CALL_CORE(tox_friend_by_public_key, TOX_ERR_FRIEND_BY_PUBLIC_KEY_OK, tox, UI8_CAST(pk.data()));
+    return QTOX_CALL_CORE(tox_friend_by_public_key, TOX_ERR_FRIEND_BY_PUBLIC_KEY_OK, tox, UI8_CAST(public_key.data()));
 }
 
 QByteArray ToxCore::friendGetPublicKey(uint32_t friend_number) const
@@ -406,7 +396,7 @@ QVariant ToxCore::friendSendMessage(uint32_t friend_number, TOX_MESSAGE_TYPE typ
     if (   !CLAMP(msg.size(), 1, CLAMP_GTE)
         || !CLAMP(msg.size(), TOX_MAX_MESSAGE_LENGTH, CLAMP_LTE))
             return QVariant();
-    return QTOX_CALL_CORE_VARIANT(tox_friend_send_message, TOX_ERR_FRIEND_SEND_MESSAGE_OK, tox, friend_number, type, UI8_CAST(msg.data()), msg.size());
+    return QTOX_CALL_CORE_VARIANT(tox_friend_send_message, TOX_ERR_FRIEND_SEND_MESSAGE_OK, tox, friend_number, type, msg.data(), msg.size());
 }
 
 static void _friendReadReceiptReceived(Tox*, uint32_t friend_number, uint32_t message_id, void* core)
@@ -462,11 +452,287 @@ QByteArray ToxCore::fileGetFileID(uint32_t friend_number, uint32_t file_number) 
         return QByteArray();
 }
 
+uint32_t ToxCore::fileSend(uint32_t friend_number, uint32_t kind, uint64_t file_size, const QByteArray& file_id, const QString& filename)
+{
+    uint8_t* id;
+    if (file_id.isEmpty())
+        id = nullptr;
+    else if (!CLAMP(file_id.size(), TOX_FILE_ID_LENGTH, CLAMP_EQ))
+        return UINT32_MAX;
+    else
+        id = UI8_CAST(file_id.data());
+    CString name(filename);
+    return QTOX_CALL_CORE(tox_file_send, TOX_ERR_FILE_SEND_OK, tox, friend_number, kind, file_size, id, name.data(), name.size());
+}
 
+bool ToxCore::fileSendChunk(uint32_t friend_number, uint32_t file_number, uint64_t position, const QByteArray& data)
+{
+    return QTOX_CALL_CORE(tox_file_send_chunk, TOX_ERR_FILE_SEND_CHUNK_OK, tox, friend_number, file_number, position, UI8_CAST(data.data()), data.size());
+}
+
+static void _fileChunkRequested(Tox*, uint32_t friend_number, uint32_t file_number, uint64_t position, size_t length, void* core)
+{
+    emit CORE_CAST(core)->(friend_number, file_number, position, length);
+}
+
+static void _fileReceiveRequested(Tox*, uint32_t friend_number, uint32_t file_number, uint32_t kind, uint64_t file_size, const uint8_t* filename, size_t filename_length, void* core)
+{
+    QString fname = CString::toString(filename, filename_length);
+    emit CORE_CAST(core)->fileReceiveRequested(friend_number, file_number, kind, file_size, fname);
+}
+
+static void _fileChunkReceived(Tox*, uint32_t friend_number, uint32_t file_number, uint64_t position, const uint8_t* data, size_t length, void* core)
+{
+    QByteArray dat(QBA_CAST(data), length);
+    emit CORE_CAST(core)->fileChunkReceived(friend_number, file_number, position, dat);
+}
+
+static void _groupInviteReceived(Tox*, int32_t friend_number, uint8_t type, const uint8_t* data, uint16_t length, void* core)
+{
+    QByteArray dat(QBA_CAST(data), length);
+    emit CORE_CAST(core)->groupInviteReceived(friend_number, type, dat);
+}
+
+static void _groupMessageReceived(Tox*, int group_number, int peer_number, const uint8_t* message, uint16_t length, void* core)
+{
+    QString msg = CString::toString(message, length);
+    emit CORE_CAST(core)->groupMessageReceived(group_number, peer_number, msg);
+}
+
+static void _groupActionReceived(Tox*, int group_number, int peer_number, const uint8_t* action, uint16_t length, void* core)
+{
+    QString act = CString::toString(action, length);
+    emit CORE_CAST(core)->groupActionReceived(group_number, peer_number, act);
+}
+
+static void _groupTitleChanged(Tox*, int group_number, int peer_number, const uint8_t* title, uint8_t length, void* core)
+{
+    QString ttl = CString::toString(title, length);
+    emit CORE_CAST(core)->groupTitleChanged(group_number, peer_number, ttl);
+}
+
+static void _groupNamelistChanged(Tox*, int group_number, int peer_number, TOX_CHAT_CHANGE change, void* core)
+{
+    emit CORE_CAST(core)->groupNamelistChanged(group_number, peer_number, change);
+}
+
+int ToxCore::addGroupchat()
+{
+    return tox_add_groupchat(tox);
+}
+
+bool ToxCore::delGroupchat(int group_number)
+{
+    return 0 == tox_del_groupchat(tox, group_number);
+}
+
+QString ToxCore::groupPeerName(int group_number, int peer_number) const
+{
+    QByteArray ret;
+    ret.resize(TOX_MAX_NAME_LENGTH);
+    int size = tox_group_peername(tox, group_number, peer_number, UI8_CAST(ret.data()));
+    if (!CLAMP(size, 0, CLAMP_GTE))
+        return QString();
+    else
+        return QString(ret);
+}
+
+QByteArray ToxCore::groupPeerPubkey(int group_number, int peer_number) const
+{
+    QByteArray ret;
+    ret.resize(TOX_PUBLIC_KEY_SIZE);
+    if (tox_group_peer_pubkey(tox, group_number, peer_number, UI8_CAST(ret.data())) == -1)
+        return QByteArray();
+    else
+        return ret;
+}
+
+bool ToxCore::inviteFriend(int32_t friend_number, int group_number)
+{
+    return 0 == tox_invite_friend(tox, friend_number, group_number);
+}
+
+int ToxCore::joinGroupchat(int32_t friend_number, const QByteArray& data)
+{
+    return tox_join_groupchat(tox, friend_number, UI8_CAST(data.data()), data.size());
+}
+
+bool ToxCore::groupMessageSend(int group_number, const QString& message)
+{
+    CString msg(message);
+    return 0 == tox_group_message_send(group_number, msg.data(), msg.size());
+}
+
+bool ToxCore::groupActionSend(int group_number, const QString& action)
+{
+    CString act(action);
+    return 0 == tox_group_action_send(group_number, act.data(), act.size());
+}
+
+bool ToxCore::groupSetTitle(int group_number, const QString& title)
+{
+    CString ttl(title);
+    return 0 == tox_group_set_title(tox, group_number, ttl.data(), ttl.size());
+}
+
+QString ToxCore::groupGetTitle(int group_number) // const
+{
+    QByteArray ret;
+    ret.resize(TOX_MAX_NAME_LENGTH);
+    int size = tox_group_get_title(tox, group_number, UI8_CAST(ret.data()), TOX_MAX_NAME_LENGTH);
+    if (!CLAMP(size, 0, CLAMP_GTE))
+        return QString();
+    else
+        return QString(ret);
+}
+
+bool ToxCore::groupPeernumerIsOurs(int group_number, int peer_number) const
+{
+    return 1 == tox_group_peernumber_is_ours(tox, group_number, peer_number);
+}
+
+int ToxCore::groupNumberPeers(int group_number) const
+{
+    return tox_group_number_peers(tox, group_number);
+}
+
+QStringList ToxCore::groupGetNames(int group_number) const
+{
+    int num = tox_group_number_peers(tox, group_number);
+    uint8_t** names = new uint8_t*[num];
+    for (int i = 0; i < num; i++)
+        names[i] = new uint8_t[TOX_MAX_NAME_LENGTH];
+    uint16_t lengths = new uint16_t[num];
+    if (num != tox_group_get_names(tox, group_number, names, lengths, num))
+        return QStringList();
+    QStringList ret;
+    ret.reserve(num);
+    for (int i = 0; i < num; i++)
+    {
+        ret.append(CString::toString(names[i], lengths[i]));
+        delete[] names[i];
+    }
+    delete[] names;
+    delete[] lengths;
+    return ret;    
+}
+
+int ToxCore::groupGetType(int group_number) const
+{
+    return tox_group_get_type(tox, group_number);
+}
+
+bool ToxCore::friendSendLossyPacket(uint32_t friend_number, const QByteArray& data)
+{
+    if (!CLAMP(data.size(), TOX_MAX_CUSTOM_PACKET_SIZE, CLAMP_LTE))
+        return false;
+    return QTOX_CALL_CORE(tox_friend_send_lossy_packet, TOX_ERR_FRIEND_CUSTOM_PACKET_OK, tox, friend_number, UI8_CAST(data.data()), data.size());
+}
+
+static void _friendLossyPacketReceived(Tox*, uint32_t friend_number, const uint8_t* data, size_t length, void* core)
+{
+    QByteArray ret(QBA_CAST(data), length);
+    emit CORE_CAST(core)->friendLossyPacketReceived(friend_number, ret);
+}
+
+bool ToxCore::friendSendLosslessPacket(uint32_t friend_number, const QByteArray& data)
+{
+    if (!CLAMP(data.size(), TOX_MAX_CUSTOM_PACKET_SIZE, CLAMP_LTE))
+        return false;
+    return QTOX_CALL_CORE(tox_friend_send_lossless_packet, TOX_ERR_FRIEND_CUSTOM_PACKET_OK, tox, friend_number, UI8_CAST(data.data()), data.size());
+}
+
+static void _friendLosslessPacketReceived(Tox*, uint32_t friend_number, const uint8_t* data, size_t length, void* core)
+{
+    QByteArray ret(QBA_CAST(data), length);
+    emit CORE_CAST(core)->friendLosslessPacketReceived(friend_number, ret);
+}
+
+QByteArray ToxCore::getSelfDhtID() const
+{
+    QByteArray ret;
+    ret.resize(TOX_PUBLIC_KEY_SIZE);
+    tox_self_get_dht_id(tox, UI8_CAST(ret.data()));
+    return ret;
+}
+
+uint16_t ToxCore::getSelfUdpPort() const
+{
+    // have to check error, but we don't use QVariant either
+    TOX_ERR_GET_PORT error;
+    uint16_t ret = tox_self_get_udp_port(tox, &error);
+    if (error != TOX_ERR_GET_PORT_OK)
+    {
+        qError() << "Error:" << "tox_self_get_udp_port" << "failed with code" << error;
+        return 0;
+    }
+    return ret;
+}
+
+uint16_t ToxCore::getSelfTcpPort() const
+{
+    // have to check error, but we don't use QVariant either
+    TOX_ERR_GET_PORT error;
+    uint16_t ret = tox_self_get_tcp_port(tox, &error);
+    if (error != TOX_ERR_GET_PORT_OK)
+    {
+        qError() << "Error:" << "tox_self_get_tcp_port" << "failed with code" << error;
+        return 0;
+    }
+    return ret;
+}
 
 ToxCore::ToxCore(const ToxOptions& options, const QByteArray& data)
 {
-    //TODO
+    uint8_t* dat;
+    size_t size;
+    if (data.isEmpty())
+    {
+        dat = nullptr;
+        size = 0;
+    }
+    else
+    {
+        dat = UI8_CAST(data.data());
+        size = data.size();
+    }
+    tox = tox_new(options->tox_options, dat, size, &error);
+    if (error == TOX_ERR_NEW_LOAD_BAD_FORMAT) // some data may have loaded
+    {
+        qWarning() << "Warning: tox_new failed with bad load format, but some data may still be loaded";
+    }
+    else if (error != TOX_ERR_NEW_OK)
+    {
+        tox = nullptr;
+        qError() << "Error:" << "tox_new" << "failed with code" << error;
+        return;
+    }
+
+    tox_callback_self_connection_status(tox, _selfConnectionStatusChanged, this);
+    tox_callback_friend_name(tox, _friendNameChanged, this);
+    tox_callback_friend_status_message(tox, _friendStatusMessageChanged, this);
+    tox_callback_friend_status(tox, _friendStatusChanged, this);
+    tox_callback_friend_connection_status(tox, _friendConnectionStatusChanged, this);
+    tox_callback_friend_typing(tox, _friendTypingChanged, this);
+    tox_callback_friend_read_receipt(tox, _friendReadReceiptReceived, this);
+    tox_callback_friend_request(tox, _friendRequestReceived, this);
+    tox_callback_friend_message(tox, _friendMessageReceived, this);
+    tox_callback_file_recv_control(tox, _fileControlReceived, this);
+    tox_callback_file_chunk_request(tox, _fileChunkRequested, this);
+    tox_callback_file_recv(tox, _fileReceiveRequested, this);
+    tox_callback_file_recv_chunk(tox, _fileChunkReceived, this);
+    tox_callback_group_invite(tox, _groupInviteReceived, this);
+    tox_callback_group_message(tox, _groupMessageReceived, this);
+    tox_callback_group_action(tox, _groupActionReceived, this);
+    tox_callback_group_title(tox, _groupTitleChanged, this);
+    tox_callback_group_namelist_change(tox, _groupNamelistChanged, this);
+    tox_callback_friend_lossy_packet(tox, _friendLossyPacketReceived, this);
+    tox_callback_friend_lossless_packet(tox, _friendLosslessPacketReceived, this);
+}
+
+TOX_ERR_NEW ToxCore::constructorError() const
+{
+    return error;
 }
 
 ToxCore::~ToxCore()

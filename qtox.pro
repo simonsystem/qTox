@@ -409,9 +409,8 @@ contains(ENABLE_SYSTRAY_GTK_BACKEND, NO) {
 
 SOURCES += \
     src/audio.cpp \
-    src/core.cpp \
+    src/toxcore.cpp \
     src/coreav.cpp \
-    src/coreencryption.cpp \
     src/corestructs.cpp \
     src/historykeeper.cpp \
     src/main.cpp \
@@ -432,7 +431,7 @@ SOURCES += \
 
 HEADERS += \
     src/audio.h \
-    src/core.h \
+    src/toxcore.h \
     src/corestructs.h \
     src/coredefines.h \
     src/coreav.h \

@@ -56,35 +56,35 @@ static R qtox_call_core(const char* name, R (*func)(ARGS..., E*), E ok_val, ARGS
 }
 #define QTOX_CALL_CORE(FUNC, OK, ...) qtox_call_core(#FUNC, FUNC, OK, __VA_ARGS__)
 
-static typedef enum {CLAMP_LTE, CLAMP_EQ, CLAMP_GTE} CLAMP_TYPE;
-static bool clamp(size_t sz, size_t req, CLAMP_TYPE type, const char* func, int line)
+template <typename R, typename E, typename... ARGS>
+static QVariant qtox_call_core_variant(const char* name, R (*func)(ARGS..., E*), E ok_val, ARGS... args)
 {
-    if (type == CLAMP_LTE)
+    E error;
+    R ret = func(args, &error);
+    if (error != ok_val)
     {
-        if (sz <= req)
-        {
-            return true;
-        }
-    }
-    else if (type == CLAMP_EQ)
-    {
-        if (sz == req)
-        {
-            return true;
-        }
-    }
-    else if (type == CLAMP_GTE)
-    {
-        if (sz >= req)
-        {
-            return true;
-        }            
+        qError() << "Error:" << name << "failed with code" << error;
+        return QVariant();
     }
     else
     {
-        qError() << "Error: unknown clamp type in" << func << "at line" << line;
-        return false;
+        return QVariant(ret);
     }
+}
+#define QTOX_CALL_CORE_VARIANT(FUNC, OK, ...) qtox_call_core_variant(#FUNC, FUNC, OK, __VA_ARGS__)
+
+static typedef enum {CLAMP_LTE, CLAMP_EQ, CLAMP_GTE} CLAMP_TYPE;
+static bool clamp(size_t sz, size_t req, CLAMP_TYPE type, const char* func, int line)
+{
+    if      (type == CLAMP_LTE && sz <= req)
+            return true;
+    else if (type == CLAMP_EQ  && sz == req)
+            return true;
+    else if (type == CLAMP_GTE && sz >= req)
+            return true;
+    else
+        qError() << "Error: unknown clamp type";
+
     qError() << "Error:" << func << "failed a clamp at line" << line << "sizes:" << sz << req;
     return false;
 }
@@ -143,7 +143,7 @@ bool ToxCore::bootstrap(const QString& host, uint16_t port, const QByteArray& pu
             return false;
     CString hst(host);
     CString pk(publicKey);
-    return QTOX_CALL_CORE(tox_bootstrap, TOX_ERR_BOOTSTRAP_OK, tox, hst.data(), port, pk.data());
+    return QTOX_CALL_CORE(tox_bootstrap, TOX_ERR_BOOTSTRAP_OK, tox, UI8_CAST(hst.data()), port, UI8_CAST(pk.data()));
 }
 
 bool ToxCore::addTcpRelay(const QString& host, uint16_t port, const QByteArray& publicKey)
@@ -153,7 +153,7 @@ bool ToxCore::addTcpRelay(const QString& host, uint16_t port, const QByteArray& 
             return false;
     CString hst(host);
     CString pk(publicKey);
-    return QTOX_CALL_CORE(tox_add_tcp_relay, TOX_ERR_BOOTSTRAP_OK, tox, hst.data(), port, pk.data());
+    return QTOX_CALL_CORE(tox_add_tcp_relay, TOX_ERR_BOOTSTRAP_OK, tox, UI8_CAST(hst.data()), port, UI8_CAST(pk.data()));
 }
 
 TOX_CONNECTION ToxCore::getSelfConnectionStatus() const
@@ -161,7 +161,7 @@ TOX_CONNECTION ToxCore::getSelfConnectionStatus() const
     return tox_self_get_connection_status(tox);
 }
 
-static void selfConnectionStatusChanged(Tox*, TOX_CONNECTION status, void* data)
+static void _selfConnectionStatusChanged(Tox*, TOX_CONNECTION status, void* data)
 {
     emit CORE_CAST(data)->selfConnectionStatusChanged(status);
 }
@@ -202,7 +202,7 @@ QByteArray ToxCore::getSelfPublicKey() const
     return ret;
 }
 
-QByteArray getSelfSecretKey() const
+QByteArray ToxCore::getSelfSecretKey() const
 {
     QByteArray ret;
     ret.resize(TOX_SECRET_KEY_SIZE];
@@ -210,12 +210,256 @@ QByteArray getSelfSecretKey() const
     return ret;
 }
 
-QByteArray getSelfName() const
+QString ToxCore::getSelfName() const
 {
     QByteArray ret;
     ret.resize(tox_self_get_name_size(tox));
     tox_self_get_name(tox, UI8_CAST(ret.data()));
+    return QString(ret);
+}
+
+bool ToxCore::setSelfName(const QString& name)
+{
+    if (name.isEmpty())
+    {
+        return QTOX_CALL_CORE(tox_self_set_name, TOX_ERR_SET_INFO_OK, tox, nullptr, 0);
+    }
+    else
+    {
+        CString str(name);
+        if (!CLAMP(str.size(), TOX_MAX_NAME_LENGTH, CLAMP_LTE))
+            return false;
+        return QTOX_CALL_CORE(tox_self_set_name, TOX_ERR_SET_INFO_OK, tox, UI8_CAST(str.data()), str.size());
+    }
+}
+
+QString ToxCore::getSelfStatusMessage() const
+{
+    QByteArray ret;
+    ret.resize(tox_self_get_status_message_size(tox));
+    tox_self_get_status_message(tox, UI8_CAST(ret.data()));
+    return QString(ret);
+}
+
+bool ToxCore::setSelfStatusMessage(const QString& status)
+{
+    if (status.isEmpty())
+    {
+        return QTOX_CALL_CORE(tox_self_set_status_message, TOX_ERR_SET_INFO_OK, tox, nullptr, 0);
+    }
+    else
+    {
+        CString str(status);
+        if (!CLAMP(str.size(), TOX_MAX_STATUS_MESSAGE_LENGTH, CLAMP_LTE))
+            return false;
+        return QTOX_CALL_CORE(tox_self_set_status_message, TOX_ERR_SET_INFO_OK, tox, UI8_CAST(str.data()), str.size());
+    }
+}
+
+TOX_USER_STATUS ToxCore::getSelfStatus() const
+{
+    return tox_self_get_status(tox);
+}
+
+void ToxCore::setSelfStatus(TOX_USER_STATUS user_status)
+{
+    tox_self_set_status(tox, user_status);
+}
+
+uint32_t ToxCore::friendAdd(const QByteArray& address, const QString& message)
+{
+    if (!CLAMP(message.size(), 1, CLAMP_GTE))
+        return UINT32_MAX;
+    CString addr(address);
+    CString msg(message);
+    if (   !CLAMP(msg.size(), TOX_MAX_FRIEND_REQUEST_LENGTH, CLAMP_LTE)
+        || !CLAMP(addr.size(), TOX_ADDRESS_SIZE, CLAMP_EQ))
+            return UINT32_MAX;
+    return QTOX_CALL_CORE(tox_friend_add, TOX_ERR_FRIEND_ADD_OK, tox, UI8_CAST(addr.data()), UI8_CAST(msg.data()), msg.size());
+}
+
+uint32_t ToxCore::friendAddNoRequest(const QByteArray& publicKey)
+{
+    if (!CLAMP(publicKey.size(), TOX_PUBLIC_KEY_SIZE, CLAMP_EQ))
+        return UINT32_MAX;
+    CString pk(publicKey);
+    return QTOX_CALL_CORE(tox_friend_add_norequest, TOX_ERR_FRIEND_ADD_OK, tox, UI8_CAST(pk.data()));
+}
+
+bool ToxCore::friendDelete(uint32_t friend_number)
+{
+    return QTOX_CALL_CORE(tox_friend_delete, TOX_ERR_FRIEND_DELETE_OK, tox, friend_number);
+}
+
+uint32_t ToxCore::friendByPublicKey(const QByteArray& public_key) const
+{
+    if (!CLAMP(public_key.size(), TOX_PUBLIC_KEY_SIZE, CLAMP_EQ))
+        return UINT32_MAX;
+    CString pk(public_key);
+    return QTOX_CALL_CORE(tox_friend_by_public_key, TOX_ERR_FRIEND_BY_PUBLIC_KEY_OK, tox, UI8_CAST(pk.data()));
+}
+
+QByteArray ToxCore::friendGetPublicKey(uint32_t friend_number) const
+{
+    QByteArray ret;
+    ret.resize(TOX_PUBLIC_KEY_SIZE);
+    if (QTOX_CALL_CORE(tox_friend_get_public_key, TOX_ERR_FRIEND_GET_PUBLIC_KEY_OK, tox, friend_number, UI8_CAST(ret.data())))
+        return ret;
+    else
+        return QByteArray();
+}
+
+bool ToxCore::friendExists(uint32_t friend_number) const
+{
+    return tox_friend_exists(tox, friend_number);
+}
+
+QList<uint32_t> ToxCore::getSelfFriendList() const
+{
+    size_t size = tox_self_get_friend_list_size(tox);
+    uint32_t[] array = new uint32_t[size];
+    tox_self_get_friend_list(tox, array);
+    QList<uint32_t> ret;
+    ret.reserve(size);
+    for (size_t i = 0; i < size; i++)
+        ret.append(array[i]);
+    delete[] array;
     return ret;
+}
+
+QString ToxCore::friendGetName(uint32_t friend_number) const
+{
+    size_t size = QTOX_CALL_CORE(tox_friend_get_name_size, TOX_ERR_FRIEND_QUERY_OK, tox, friend_number);
+    if (size == SIZE_MAX)
+        return QString();
+    QByteArray ret;
+    ret.resize(size);
+    if (QTOX_CALL_CORE(tox_friend_get_name, TOX_ERR_FRIEND_QUERY_OK, tox, friend_number, UI8_CAST(ret.data())))
+        return QString(ret);
+    else
+        return QString();
+}
+
+static void _friendNameChanged(Tox*, uint32_t friend_number, const uint8_t* name, size_t length, void* core)
+{
+    QString str = CString::toString(name, length);
+    emit CORE_CAST(core)->friendNameChanged(friend_number, str);
+}
+
+QString ToxCore::friendGetStatusMessage(uint32_t friend_number) const
+{
+    size_t size = QTOX_CALL_CORE(tox_friend_get_status_message_size, TOX_ERR_FRIEND_QUERY_OK, tox, friend_number);
+    if (size == SIZE_MAX)
+        return QString();
+    QByteArray ret;
+    ret.resize(size);
+    if (QTOX_CALL_CORE(tox_friend_get_status_message, TOX_ERR_FRIEND_QUERY_OK, tox, friend_number, UI8_CAST(ret.data())))
+        return QString(ret);
+    else
+        return QString();
+}
+
+static void _friendStatusMessageChanged(Tox*, uint32_t friend_number, const uint8_t* message, size_t length, void* core)
+{
+    QString str = CString::toString(message, length);
+    emit CORE_CAST(core)->friendStatusMessageChanged(friend_number, str);
+}
+
+QVariant ToxCore::friendGetStatus(uint32_t friend_number) const
+{
+    return QTOX_CALL_CORE_VARIANT(tox_friend_get_status, TOX_ERR_FRIEND_QUERY_OK, tox, friend_number);
+}
+
+static void _friendStatusChanged(Tox*, uint32_t friend_number, TOX_USER_STATUS status, void* core)
+{
+    emit CORE_CAST(core)->friendStatusChanged(friend_number, status);
+}
+
+QVariant ToxCore::friendGetConnectionStatus(uint32_t friend_number) const
+{
+    return QTOX_CALL_CORE_VARIANT(tox_friend_get_connection_status, TOX_ERR_FRIEND_QUERY_OK, tox, friend_number);
+}
+
+static void _friendConnectionStatusChanged(Tox*, uint32_t friend_number, TOX_CONNECTION conn, void* core)
+{
+    emit CORE_CAST(core)->friendConnectionStatusChanged(friend_number, conn);
+}
+
+QVariant ToxCore::friendGetTyping(uint32_t friend_number) const
+{
+    return QTOX_CALL_CORE_VARIANT(tox_friend_get_typing, TOX_ERR_FRIEND_QUERY_OK, tox, friend_number);
+}
+
+static void _friendTypingChanged(Tox*, uint32_t friend_number, bool typing, void* core)
+{
+    emit CORE_CAST(core)->friendTypingChanged(friend_number, typing);
+}
+
+bool ToxCore::selfSetTyping(uint32_t friend_number, bool typing)
+{
+    return QTOX_CALL_CORE(tox_self_set_typing, TOX_ERR_SET_TYPING_OK, tox, friend_number, typing);
+}
+
+QVariant ToxCore::friendSendMessage(uint32_t friend_number, TOX_MESSAGE_TYPE type, const QString& message)
+{
+    CString msg(message);
+    if (   !CLAMP(msg.size(), 1, CLAMP_GTE)
+        || !CLAMP(msg.size(), TOX_MAX_MESSAGE_LENGTH, CLAMP_LTE))
+            return QVariant();
+    return QTOX_CALL_CORE_VARIANT(tox_friend_send_message, TOX_ERR_FRIEND_SEND_MESSAGE_OK, tox, friend_number, type, UI8_CAST(msg.data()), msg.size());
+}
+
+static void _friendReadReceiptReceived(Tox*, uint32_t friend_number, uint32_t message_id, void* core)
+{
+    emit CORE_CAST(core)->friendReadReceiptReceived(friend_number, message_id);
+}
+
+static void _friendRequestReceived(Tox*, const uint8_t* public_key, const uint8_t* message, size_t length, void* core)
+{
+    QByteArray pk(QBA_CAST(public_key), TOX_PUBLIC_KEY_SIZE);
+    QString msg = CString::toString(message, length);
+    emit CORE_CAST(core)->friendRequestReceived(pk, msg);
+}
+
+static void _friendMessageReceived(Tox*, uint32_t friend_number, TOX_MESSAGE_TYPE type, const uint8_t* message, size_t length, void* core)
+{
+    QString msg = CString::toString(message, length);
+    emit CORE_CAST(core)->friendMessageReceived(friend_number, type, msg);
+}
+
+QByteArray ToxCore::hash(const QByteArray& data)
+{
+    QByteArray ret;
+    ret.resize(TOX_HASH_LENGTH);
+    if (tox_hash(UI8_CAST(ret.data()), UI8_CAST(data.data()), data.size()))
+        return ret;
+    else
+        return QByteArray();
+}
+
+bool ToxCore::fileControl(uint32_t friend_number, uint32_t file_number, TOX_FILE_CONTROL control)
+{
+    return QTOX_CALL_CORE(tox_file_control, TOX_ERR_FILE_CONTROL_OK, tox, friend_number, file_number, control);
+}
+
+static void _fileControlReceived(Tox*, uint32_t friend_number, uint32_t file_number, TOX_FILE_CONTROL control, void* core)
+{
+    emit CORE_CAST(core)->fileControlReceived(friend_number, file_number, control);
+}
+
+bool ToxCore::fileSeek(uint32_t friend_number, uint32_t file_number, uint64_t position)
+{
+    return QTOX_CALL_CORE(tox_file_seek, TOX_ERR_FILE_SEEK_OK, tox, friend_number, file_number, position);
+}
+
+QByteArray ToxCore::fileGetFileID(uint32_t friend_number, uint32_t file_number) const
+{
+    QByteArray ret;
+    ret.resize(TOX_FILE_ID_LENGTH);
+    if (QTOX_CALL_CORE(tox_file_get_file_id, TOX_ERR_FILE_GET_OK, tox, friend_number, file_number, UI8_CAST(ret.data())))
+        return ret;
+    else
+        return QByteArray();
 }
 
 

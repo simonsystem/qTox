@@ -134,7 +134,7 @@ public:
     // translates a friend's pk to their current friend_number, returns UINT32_MAX on failure
     uint32_t friendByPublicKey(const QByteArray& public_key) const;
 
-    // get the pk for the given friend_number
+    // get the pk for the given friend_number, or null QBA on error
     QByteArray friendGetPublicKey(uint32_t friend_number) const;
 
     // check if friend_number is valid
@@ -164,8 +164,9 @@ public:
     QVariant friendGetConnectionStatus(uint32_t friend_number) const;
 
     // get whether or not the friend is typing
+    // use QVariant::toBool
     // should probably use the corresponding signal instead of this
-    bool friendGetTyping(uint32_t friend_number) const;
+    QVariant friendGetTyping(uint32_t friend_number) const;
 
     // set whether or not we are typing, returns true on success
     bool selfSetTyping(uint32_t friend_number, bool is_typing);
@@ -178,16 +179,16 @@ public:
 
     /* BEGIN FILE PSEUDO NAMESPACE */
 
-    // get a cryptographic hash
-    QByteArray hash(const QByteArray& data);
+    // get a cryptographic hash, returns null QBA on error
+    static QByteArray hash(const QByteArray& data);
 
     // send a file control command, returns true on success
-    bool fileSendControl(uint32_t friend_number, uint32_t file_number, TOX_FILE_CONTROL control);
+    bool fileControl(uint32_t friend_number, uint32_t file_number, TOX_FILE_CONTROL control);
 
     // send a file seek command, used only for resuming, returns true on success
-    bool fileSendSeek(uint32_t friend_numner, uint32_t file_number, uint64_t position);
+    bool fileSeek(uint32_t friend_numner, uint32_t file_number, uint64_t position);
 
-    // get the unique and persistent file_id for a transfer
+    // get the unique and persistent file_id for a transfer, returns null QBA on error
     QByteArray fileGetFileID(uint32_t friend_number, uint32_t file_number) const;
 
     // send a file transfer request. Max name length TOX_MAX_FILENAME_LENGTH,

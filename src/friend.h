@@ -19,6 +19,7 @@
 
 #include <QString>
 #include "corestructs.h"
+#include "profile.h"
 
 struct FriendWidget;
 class ChatForm;
@@ -26,12 +27,11 @@ class ChatForm;
 struct Friend
 {
 public:
-    Friend(int FriendId, const ToxID &UserId);
+    Friend(Profile* profile, int FriendId, const ToxID &UserId);
     Friend(const Friend& other)=delete;
     ~Friend();
     Friend& operator=(const Friend& other)=delete;
 
-    void setName(QString name);
     void setAlias(QString name);
     QString getDisplayedName() const;
 
@@ -40,22 +40,13 @@ public:
     void setEventFlag(int f);
     int getEventFlag() const;
 
-    const ToxID &getToxID() const;
-    int getFriendID() const;
-
-    void setStatus(Status s);
-    Status getStatus() const;
-
     ChatForm *getChatForm();
     FriendWidget *getFriendWidget();
 
 private:
-    QString userAlias, userName;
-    ToxID userID;
-    int friendId;
+    Profile* profile
+    QString userAlias;
     int hasNewEvents;
-    Status friendStatus;
-
     FriendWidget* widget;
     ChatForm* chatForm;
 };

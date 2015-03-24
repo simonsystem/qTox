@@ -1,3 +1,19 @@
+/*
+    Copyright (C) 2015 by Project Tox <https://tox.im>
+
+    This file is part of qTox, a Qt-based graphical interface for Tox.
+
+    This program is libre software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+    See the COPYING file for more details.
+*/
+
 /* A C++11/Qt5 thin wrapper to the Tox toxcore public API in tox.h.
  * This is a *thin* wrapper, anyone using this is expected to have also
  * read toxcore's header, linked at the bottom of this comment.
@@ -50,9 +66,13 @@ public:
     Tox_Options* tox_options = nullptr;
 };
 
+class ToxAv;
+
 class ToxCore : public QObject
 {
     Q_OBJECT
+
+    friend class ToxAv; // used in accessing Tox* tox for toxav_new
 
 public:
     // the constructor wraps tox_new: data is any save data, null/empty data for new profile

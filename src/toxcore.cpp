@@ -62,22 +62,22 @@
    Many thanks to nurupo and iphy for much help with the templating
 */
 
-template <typename R, typename E, typename... ARGS>
-static R qtox_call_core(const char* name, R (*func)(ARGS..., E*), E ok_val, ARGS... args)
+template<typename Func, typename E, typename ...Args>
+typename std::result_of<Func (Args..., E *)>::type qtox_call_core(const char* name, Func func, E ok_val, Args ...args)
 {
     E error;
-    R ret = func(args..., &error);
+    auto ret = func(args..., &error);
     if (error != ok_val)
         qWarning() << "Error:" << name << "failed with code" << error;
     return ret;
 }
 #define QTOX_CALL_CORE(FUNC, OK, ...) qtox_call_core(#FUNC, FUNC, OK, __VA_ARGS__)
 
-template <typename R, typename E, typename... ARGS>
-static QVariant qtox_call_core_variant(const char* name, R (*func)(ARGS..., E*), E ok_val, ARGS... args)
+template <typename Func, typename E, typename ...ARGS>
+static QVariant qtox_call_core_variant(const char* name, Func func, E ok_val, ARGS ...args)
 {
     E error;
-    R ret = func(args..., &error);
+    auto ret = func(args..., &error);
     if (error != ok_val)
     {
         qWarning() << "Error:" << name << "failed with code" << error;
@@ -156,8 +156,7 @@ bool ToxCore::bootstrap(const QString& host, uint16_t port, const QByteArray& pu
         || !CLAMP(publicKey.size(), TOX_PUBLIC_KEY_SIZE, CLAMP_EQ))
             return false;
     CString hst(host);
-    return qtox_call_core<bool, TOX_ERR_BOOTSTRAP, Tox*, const char*, uint16_t, const uint8_t*>
-            ("tox_bootstrap", tox_bootstrap, TOX_ERR_BOOTSTRAP_OK, tox, reinterpret_cast<const char*>(hst.data()), port, CUI8_CAST(publicKey.data()));
+    return QTOX_CALL_CORE(tox_bootstrap, TOX_ERR_BOOTSTRAP_OK, tox, reinterpret_cast<const char*>(hst.data()), port, CUI8_CAST(publicKey.data()));
 }
 
 bool ToxCore::addTcpRelay(const QString& host, uint16_t port, const QByteArray& publicKey)
@@ -166,7 +165,7 @@ bool ToxCore::addTcpRelay(const QString& host, uint16_t port, const QByteArray& 
         || !CLAMP(publicKey.size(), TOX_PUBLIC_KEY_SIZE, CLAMP_EQ))
             return false;
     CString hst(host);
-    return QTOX_CALL_CORE(tox_add_tcp_relay, TOX_ERR_BOOTSTRAP_OK, tox, hst.data(), port, CUI8_CAST(publicKey.data()));
+    return QTOX_CALL_CORE(tox_add_tcp_relay, TOX_ERR_BOOTSTRAP_OK, tox, reinterpret_cast<const char*>(hst.data()), port, CUI8_CAST(publicKey.data()));
 }
 
 TOX_CONNECTION ToxCore::getSelfConnectionStatus() const

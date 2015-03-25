@@ -24,14 +24,21 @@
 
 template<class K, class V> class QHash;
 
-class Profile : public ToxCore
+/* No other class besides this one should call any Profile::tox functions
+   directly, due to threading issues. Instead emit a signal and connect
+   that to whatever slot on ToxCore. */
+
+class Profile : public QObject
 {
     Q_OBJECT
 
 public:
+    ToxCore tox;
+    ToxAv toxav;
+
+private:
     QHash<int, Friend> friendsList;
     QHash<int, Group*> groupList;
-    ToxAv toxav;
 };
 
 

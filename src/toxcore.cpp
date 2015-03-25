@@ -110,9 +110,9 @@ static bool clamp(size_t sz, size_t req, CLAMP_TYPE type, const char* func, int 
 // To make best use of this, only allow one call per line
 
 // I'm not copying and pasting this, much less typing it each time
-#define QBA_CAST(data) (reinterpret_cast<const char*>((data)))
-#define UI8_CAST(data) (reinterpret_cast<uint8_t*>   ((data)))
-#define CUI8_CAST(data) (reinterpret_cast<const uint8_t*>   ((data)))
+#define  QBA_CAST(data) (reinterpret_cast<const char*>   (data))
+#define  UI8_CAST(data) (reinterpret_cast<      uint8_t*>(data))
+#define CUI8_CAST(data) (reinterpret_cast<const uint8_t*>(data))
 
 // ditto
 #define CORE_CAST(ptr) (static_cast<ToxCore*>((ptr)))

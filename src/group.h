@@ -20,6 +20,7 @@
 #include <QMap>
 #include <QObject>
 #include <QStringList>
+#include "profile.h"
 
 #define RETRY_PEER_INFO_INTERVAL 500
 
@@ -32,18 +33,12 @@ class Group : public QObject
 {
     Q_OBJECT
 public:
-    Group(int GroupId, QString Name, bool IsAvGroupchat);
+    Group(Profile* profile);
     virtual ~Group();
 
-    bool isAvGroupchat() const;
-    int getGroupId() const;
-    int getPeersCount() const;
-    void regeneratePeerList();
-    QStringList getPeerList() const;
-    bool isSelfPeerNumber(int peernumber) const;
 
-    GroupChatForm *getChatForm();
-    GroupWidget *getGroupWidget();
+    GroupChatForm* getChatForm();
+    GroupWidget* getGroupWidget();
 
     void setEventFlag(int f);
     int getEventFlag() const;
@@ -51,27 +46,11 @@ public:
     void setMentionedFlag(int f);
     int getMentionedFlag() const;
 
-    /*
-    void addPeer(int peerId, QString name);
-    void removePeer(int peerId);
-    */
-
-    void updatePeer(int peerId, QString newName);
-    void setName(const QString& name);
-
-    QString resolveToxID(const ToxID &id) const;
-
 private:
+    Profile* profile;
     GroupWidget* widget;
     GroupChatForm* chatForm;
-    QStringList peers;
-    QMap<QString, QString> toxids;
     int hasNewMessages, userWasMentioned;
-    int groupId;
-    int nPeers;
-    int selfPeerNum = -1;
-    bool avGroupchat;
-
 };
 
 #endif // GROUP_H

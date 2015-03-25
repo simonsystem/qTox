@@ -19,14 +19,18 @@
 
 #include "toxcore.h"
 #include "toxav.h"
+#include "friend.h"
+#include "group.h"
 
-class Profile : public QObject
+template<class K, class V> class QHash;
+
+class Profile : public ToxCore
 {
     Q_OBJECT
 
 public:
     QHash<int, Friend> friendsList;
-    ToxCore tox;
+    QHash<int, Group*> groupList;
     ToxAv toxav;
 };
 

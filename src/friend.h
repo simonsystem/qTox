@@ -27,15 +27,13 @@ class ChatForm;
 struct Friend
 {
 public:
-    Friend(Profile* profile, int FriendId, const ToxID &UserId);
+    Friend(Profile* profile);
     Friend(const Friend& other)=delete;
     ~Friend();
     Friend& operator=(const Friend& other)=delete;
 
     void setAlias(QString name);
     QString getDisplayedName() const;
-
-    void setStatusMessage(QString message);
 
     void setEventFlag(int f);
     int getEventFlag() const;

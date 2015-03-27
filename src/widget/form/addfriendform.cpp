@@ -22,7 +22,6 @@
 #include <tox/tox.h>
 #include "ui_mainwindow.h"
 #include "src/nexus.h"
-#include "src/core.h"
 #include "src/misc/cdata.h"
 #include "src/toxdns.h"
 #include "src/misc/settings.h"
